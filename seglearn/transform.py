@@ -8,7 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.exceptions import NotFittedError
-from sklearn.utils import check_random_state, check_array
+from sklearn.utils import check_random_state, check_array, check_consistent_length
 from sklearn.utils.metaestimators import _BaseComposition
 
 from .base import TS_Data
@@ -16,7 +16,7 @@ from .feature_functions import base_features
 from .util import get_ts_data_parts, check_ts_data
 
 __all__ = ['SegmentX', 'SegmentXY', 'SegmentXYForecast', 'PadTrunc', 'InterpLongToWide', 'Interp',
-           'FeatureRep', 'FeatureRepMix', 'FunctionTransformer']
+           'FeatureRep', 'FeatureRepMix', 'FunctionTransformer', 'patch_sampler']
 
 
 class XyTransformerMixin(object):
@@ -1489,3 +1489,108 @@ class FunctionTransformer(BaseEstimator, TransformerMixin):
             if Xc is not None:
                 Xt = TS_Data(Xt, Xc)
             return Xt
+
+
+class _InitializePickableSampler(object):
+    '''
+    Class for initializing a serialized/pickled and dynamically patched imbalanced-learn Sampler.
+    '''
+    def __call__(self, sampler_class):
+        '''
+        Recreate a dynamically patched Sampler by creating a _InitializePickableSampler object and
+        turning it into a patched Sampler by using the patch_sampler function.
+        '''
+        obj = _InitializePickableSampler()
+        obj.__class__ = patch_sampler(sampler_class)
+        return obj
+
+
+def patch_sampler(sampler_class):
+    '''
+    Return a dynamically patched imbalanced-learn Sampler class compatible with Pype.
+    '''
+    if not hasattr(sampler_class, 'fit_resample') or not hasattr(sampler_class, '_check_X_y'):
+        raise TypeError('The sampler class to be patched must have a "fit_resample" and a'
+                        ' "_check_X_y" method')
+
+    class PickableSampler(sampler_class, XyTransformerMixin):
+        '''
+        Dynamically created (pickable) class derived from an imbalanced-learn Sampler and the
+        XyTransformerMixin in order to enable the use of the imbalanced-learn Sampler transforms
+        inside a seglearn Pype.
+        '''
+
+        @staticmethod
+        def _check_X_y(Xt, yt):
+            '''
+            Circumvent the check whether dim(Xt) == 2.
+            '''
+            Xt_2d = Xt.reshape(Xt.shape[0], -1)
+            _, yt, binarize_yt = super(PickableSampler, PickableSampler)._check_X_y(Xt_2d, yt)
+            Xt = check_array(Xt, dtype='numeric', ensure_2d=False, allow_nd=True)
+            return Xt, yt, binarize_yt
+
+        def transform(self, X, y=None, sample_weight=None):
+            '''
+            Return the given segmented time series data (identity transform) when calling transform
+            without fit on this data (potentially making a prediction) to not alter test data.
+
+            Parameters
+            ----------
+            X : array-like, shape [n_series, ...]
+               time series data and (optionally) contextual data
+            y : array-like, shape [n_series] (default=None)
+                target vector
+            sample_weight : array-like shape [n_series] (default=None)
+                sample weights
+
+            Returns
+            -------
+            X : array-like [n_series, ...]
+            y : array-like [n_series]
+            sample_weight : array-like shape [n_series]
+            '''
+            check_ts_data(X, y)
+            return X, y, sample_weight
+
+        def fit_transform(self, X, y, sample_weight=None, **fit_params):
+            '''
+            Resample the given segmented time series data based on the Sampler transformer provided
+            as a bass class when calling fit (i.e. not making any prediction on the test data) on
+            this transformer.
+            Sample weights always returned as None.
+
+            Parameters
+            ----------
+            X : array-like, shape [n_series, ...]
+               time series data and (optionally) contextual data
+            y : array-like, shape [n_series] (default=None)
+                target vector
+            sample_weight : array-like shape [n_series] (default=None)
+                sample weights
+            **fit_params : dict of string -> object
+                parameters for the inner imbalanced-learn Sampler object
+
+            Returns
+            -------
+            X : array-like [n_series, ...]
+            y : array-like [n_series]
+            sample_weight : None
+            '''
+            check_ts_data(X, y)
+            Xt, Xc = get_ts_data_parts(X)
+            Xt, yt = super(PickableSampler, self).fit_resample(Xt, y, **fit_params)
+            if Xc is not None:
+                Xt = TS_Data(Xt, Xc)
+            return Xt, yt, None
+
+        def __reduce__(self):
+            '''
+            Definition on how to serialize/pickle an object of this dynamically created class.
+            '''
+            return (_InitializePickableSampler(), (sampler_class,), self.__dict__)
+
+    new_class_name = "Patched" + sampler_class.__name__
+    PickableSampler.__name__ = new_class_name
+    PickableSampler.__qualname__ = new_class_name
+    return PickableSampler
