@@ -2,6 +2,7 @@
 # License: BSD
 
 import pytest
+import pickle
 
 import numpy as np
 
@@ -671,3 +672,25 @@ def test_function_transform():
     illegal_resampler.fit(X, y)
     with pytest.raises(ValueError):
         Xtrans = illegal_resampler.transform(X)
+
+# MUST be defined in the global scope for pickling to work correctly
+class MockImblearnSampler(object):
+    def _check_X_y(X, y):
+        return X, y, True
+    def fit_resample(self, X, y):
+        return X, y
+
+def test_patch_sampler():
+    # test patch_sampler on a class without a fit_resample function
+    class EmptyClass(object):
+        pass
+    with pytest.raises(TypeError):
+        transform.patch_sampler(EmptyClass)
+
+    # test patch_sampler on a mocked imbalanced-learn Sampler class
+    unpatched_sampler = MockImblearnSampler()
+    patched_sampler = transform.patch_sampler(MockImblearnSampler)()
+    assert str(patched_sampler.__class__) != str(unpatched_sampler.__class__)
+    pickled_sampler = pickle.dumps(patched_sampler)
+    unpickled_sampler = pickle.loads(pickled_sampler)
+    assert str(patched_sampler.__class__) == str(unpickled_sampler.__class__)
