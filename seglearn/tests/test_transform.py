@@ -674,11 +674,15 @@ def test_function_transform():
         Xtrans = illegal_resampler.transform(X)
 
 # MUST be defined in the global scope for pickling to work correctly
+def mock_resample(ndarray):
+    return ndarray[:len(ndarray) // 2]
 class MockImblearnSampler(object):
+    @staticmethod
     def _check_X_y(X, y):
         return X, y, True
     def fit_resample(self, X, y):
-        return X, y
+        X, y, _ = self._check_X_y(X, y)
+        return mock_resample(X), mock_resample(y)
 
 def test_patch_sampler():
     # test patch_sampler on a class without a fit_resample function
@@ -694,3 +698,47 @@ def test_patch_sampler():
     pickled_sampler = pickle.dumps(patched_sampler)
     unpickled_sampler = pickle.loads(pickled_sampler)
     assert str(patched_sampler.__class__) == str(unpickled_sampler.__class__)
+
+    # multivariate ts
+    X = np.random.rand(100, 10, 4)
+    y = np.ones(100)
+    Xt, yt, _ = patched_sampler.transform(X, y)
+    assert Xt is X
+    assert yt is y
+    Xt, yt, _ = patched_sampler.fit_transform(X, y)
+    assert np.array_equal(Xt, mock_resample(X))
+    assert np.array_equal(yt, mock_resample(y))
+
+    # ts with multivariate contextual data
+    X = TS_Data(np.random.rand(100, 10, 4), np.random.rand(100, 3))
+    Xt_orig, _ = get_ts_data_parts(X)
+    y = np.ones(100)
+    Xt, yt, _ = patched_sampler.transform(X, y)
+    assert Xt is X
+    assert yt is y
+    Xt, yt, _ = patched_sampler.fit_transform(X, y)
+    Xtt, Xtc = get_ts_data_parts(Xt)
+    assert np.array_equal(Xtt, mock_resample(Xt_orig))
+    assert np.array_equal(yt, mock_resample(y))
+
+    # ts with univariate contextual data
+    X = TS_Data(np.random.rand(100, 10, 4), np.random.rand(100))
+    Xt_orig, _ = get_ts_data_parts(X)
+    y = np.ones(100)
+    Xt, yt, _ = patched_sampler.transform(X, y)
+    assert Xt is X
+    assert yt is y
+    Xt, yt, _ = patched_sampler.fit_transform(X, y)
+    Xtt, Xtc = get_ts_data_parts(Xt)
+    assert np.array_equal(Xtt, mock_resample(Xt_orig))
+    assert np.array_equal(yt, mock_resample(y))
+
+    # univariate ts
+    X = np.random.rand(100, 10)
+    y = np.ones(100)
+    Xt, yt, _ = patched_sampler.transform(X, y)
+    assert Xt is X
+    assert yt is y
+    Xt, yt, _ = patched_sampler.fit_transform(X, y)
+    assert np.array_equal(Xt, mock_resample(X))
+    assert np.array_equal(yt, mock_resample(y))
