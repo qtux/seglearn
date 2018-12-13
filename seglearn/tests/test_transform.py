@@ -10,6 +10,7 @@ import seglearn.transform as transform
 from seglearn.base import TS_Data
 from seglearn.feature_functions import all_features, mean
 from seglearn.util import get_ts_data_parts
+from sklearn.utils import shuffle
 
 
 def test_sliding_window():
@@ -693,7 +694,7 @@ def test_patch_sampler():
 
     # test patch_sampler on a mocked imbalanced-learn Sampler class
     unpatched_sampler = MockImblearnSampler()
-    patched_sampler = transform.patch_sampler(MockImblearnSampler)()
+    patched_sampler = transform.patch_sampler(MockImblearnSampler)(shuffle=True, random_state=0)
     assert str(patched_sampler.__class__) != str(unpatched_sampler.__class__)
     pickled_sampler = pickle.dumps(patched_sampler)
     unpickled_sampler = pickle.loads(pickled_sampler)
@@ -706,8 +707,9 @@ def test_patch_sampler():
     assert Xt is X
     assert yt is y
     Xt, yt, _ = patched_sampler.fit_transform(X, y)
-    assert np.array_equal(Xt, mock_resample(X))
-    assert np.array_equal(yt, mock_resample(y))
+    X, y = shuffle(mock_resample(X), mock_resample(y), random_state=0)
+    assert np.array_equal(Xt, X)
+    assert np.array_equal(yt, y)
 
     # ts with multivariate contextual data
     X = TS_Data(np.random.rand(100, 10, 4), np.random.rand(100, 3))
@@ -718,8 +720,9 @@ def test_patch_sampler():
     assert yt is y
     Xt, yt, _ = patched_sampler.fit_transform(X, y)
     Xtt, Xtc = get_ts_data_parts(Xt)
-    assert np.array_equal(Xtt, mock_resample(Xt_orig))
-    assert np.array_equal(yt, mock_resample(y))
+    Xt_orig, y = shuffle(mock_resample(Xt_orig), mock_resample(y), random_state=0)
+    assert np.array_equal(Xtt, Xt_orig)
+    assert np.array_equal(yt, y)
 
     # ts with univariate contextual data
     X = TS_Data(np.random.rand(100, 10, 4), np.random.rand(100))
@@ -730,8 +733,9 @@ def test_patch_sampler():
     assert yt is y
     Xt, yt, _ = patched_sampler.fit_transform(X, y)
     Xtt, Xtc = get_ts_data_parts(Xt)
-    assert np.array_equal(Xtt, mock_resample(Xt_orig))
-    assert np.array_equal(yt, mock_resample(y))
+    Xt_orig, y = shuffle(mock_resample(Xt_orig), mock_resample(y), random_state=0)
+    assert np.array_equal(Xtt, Xt_orig)
+    assert np.array_equal(yt, y)
 
     # univariate ts
     X = np.random.rand(100, 10)
@@ -740,5 +744,6 @@ def test_patch_sampler():
     assert Xt is X
     assert yt is y
     Xt, yt, _ = patched_sampler.fit_transform(X, y)
-    assert np.array_equal(Xt, mock_resample(X))
-    assert np.array_equal(yt, mock_resample(y))
+    X, y = shuffle(mock_resample(X), mock_resample(y), random_state=0)
+    assert np.array_equal(Xt, X)
+    assert np.array_equal(yt, y)
