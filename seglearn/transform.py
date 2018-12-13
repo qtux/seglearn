@@ -1511,9 +1511,14 @@ def patch_sampler(sampler_class):
     '''
     Return a dynamically patched imbalanced-learn Sampler class compatible with Pype.
     '''
-    if not hasattr(sampler_class, 'fit_resample') or not hasattr(sampler_class, '_check_X_y'):
-        raise TypeError('The sampler class to be patched must have a "fit_resample" and a'
-                        ' "_check_X_y" method')
+    conditions = [
+        hasattr(sampler_class, 'fit_resample'),
+        hasattr(sampler_class, '_check_X_y'),
+        hasattr(sampler_class, '_get_param_names'),
+    ]
+    if not all(conditions):
+        raise TypeError('The sampler class to be patched must have a "fit_resample", a "_check_X_y"'
+                        ' method and a "_get_param_names" class method.')
 
     class PickableSampler(sampler_class, XyTransformerMixin):
         '''
@@ -1547,6 +1552,17 @@ def patch_sampler(sampler_class):
             if "random_state" in orig_args:
                 kwargs["random_state"] = random_state
             super(PickableSampler, self).__init__(**kwargs)
+
+        @classmethod
+        def _get_param_names(cls):
+            '''
+            Get parameters of the imbalanced-learn Sampler base class and the additional arguments
+            of the dynamically derived class.
+            '''
+            init_signature = signature(getattr(cls, '__init__'))
+            parameters = [p.name for p in init_signature.parameters.values()
+                          if p.name != 'self' and p.kind != p.VAR_KEYWORD]
+            return sorted(set(sampler_class._get_param_names() + parameters))
 
         @staticmethod
         def _check_X_y(Xt, yt):

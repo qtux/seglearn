@@ -32,6 +32,7 @@ pipe = Pype([
     ('segment', SegmentXY(width=1, overlap=0)),
     ('resample', patch_sampler(RandomUnderSampler)()),
 ])
+print("Pipeline:", pipe)
 
 print("Calling a transform on the data does not change it ...")
 Xf, yf = pipe.transform(X, y)
@@ -64,6 +65,7 @@ pipe = Pype([
     ('feature', FeatureRep(features={"min":minimum})),
     ('estimator', VerboseDummyClassifier(strategy="constant", constant=True)),
 ])
+print("Pipeline:", pipe)
 
 print("Split the data into half training and half test data:")
 X_train, X_test, y_train, y_test = temporal_split(X, y, 0.5)

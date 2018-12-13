@@ -11,6 +11,7 @@ from seglearn.base import TS_Data
 from seglearn.feature_functions import all_features, mean
 from seglearn.util import get_ts_data_parts
 from sklearn.utils import shuffle
+from sklearn.base import BaseEstimator
 
 
 def test_sliding_window():
@@ -677,7 +678,9 @@ def test_function_transform():
 # MUST be defined in the global scope for pickling to work correctly
 def mock_resample(ndarray):
     return ndarray[:len(ndarray) // 2]
-class MockImblearnSampler(object):
+class MockImblearnSampler(BaseEstimator):
+    def __init__(self, mocked_param="mock"):
+        pass
     @staticmethod
     def _check_X_y(X, y):
         return X, y, True
@@ -699,6 +702,11 @@ def test_patch_sampler():
     pickled_sampler = pickle.dumps(patched_sampler)
     unpickled_sampler = pickle.loads(pickled_sampler)
     assert str(patched_sampler.__class__) == str(unpickled_sampler.__class__)
+
+    # test representation
+    assert "mocked_param" in repr(patched_sampler)
+    assert "random_state" in repr(patched_sampler)
+    assert "shuffle" in repr(patched_sampler)
 
     # multivariate ts
     X = np.random.rand(100, 10, 4)
