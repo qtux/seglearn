@@ -60,7 +60,7 @@ class VerboseDummyClassifier(DummyClassifier):
 
 pipe = Pype([
     ('segment', SegmentXY(width=1, overlap=0)),
-    ('resample', patch_sampler(RandomUnderSampler)()),
+    ('resample', patch_sampler(RandomUnderSampler)(shuffle=True)),
     ('feature', FeatureRep(features={"min":minimum})),
     ('estimator', VerboseDummyClassifier(strategy="constant", constant=True)),
 ])

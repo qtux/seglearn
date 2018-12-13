@@ -7,6 +7,8 @@ This module is for transforming time series data.
 import numpy as np
 from scipy.interpolate import interp1d
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils import check_random_state, check_array, check_consistent_length, shuffle
+from sklearn.utils.fixes import signature
 from sklearn.exceptions import NotFittedError
 from sklearn.utils import check_random_state, check_array, check_consistent_length
 from sklearn.utils.metaestimators import _BaseComposition
@@ -1518,7 +1520,33 @@ def patch_sampler(sampler_class):
         Dynamically created (pickable) class derived from an imbalanced-learn Sampler and the
         XyTransformerMixin in order to enable the use of the imbalanced-learn Sampler transforms
         inside a seglearn Pype.
+
+        Parameters
+        ----------
+        shuffle : boolean, optional (default=False)
+        random_state : int, RandomState instance or None, optional (default=None)
+            seed of the pseudo random number generator used for shuffling the resampled data
+        **kwargs : keyword arguments to be passed to the imbalanced-learn Sampler base class
+
+        Returns
+        -------
+        self : object
+            returns self
         '''
+        def __init__(self, shuffle=False, random_state=None, **kwargs):
+            # set shuffle and random_state
+            self.shuffle = shuffle
+            self.random_state = random_state
+
+            # call imbalanced-learn Sampler base class with the correct arguments
+            orig_signature = signature(super(PickableSampler, self).__init__)
+            orig_args = [p.name for p in orig_signature.parameters.values()
+                         if p.name != 'self' and p.kind != p.VAR_KEYWORD]
+            if "shuffle" in orig_args:
+                kwargs["shuffle"] = shuffle
+            if "random_state" in orig_args:
+                kwargs["random_state"] = random_state
+            super(PickableSampler, self).__init__(**kwargs)
 
         @staticmethod
         def _check_X_y(Xt, yt):
@@ -1580,6 +1608,8 @@ def patch_sampler(sampler_class):
             check_ts_data(X, y)
             Xt, Xc = get_ts_data_parts(X)
             Xt, yt = super(PickableSampler, self).fit_resample(Xt, y, **fit_params)
+            if self.shuffle:
+                Xt, yt = shuffle(Xt, yt, random_state=self.random_state)
             if Xc is not None:
                 Xt = TS_Data(Xt, Xc)
             return Xt, yt, None
