@@ -8,7 +8,7 @@ import numpy as np
 from scipy.interpolate import interp1d
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.utils import check_random_state, check_array, check_consistent_length, shuffle
-from sklearn.utils.fixes import signature
+from inspect import signature
 from sklearn.exceptions import NotFittedError
 from sklearn.utils import check_random_state, check_array, check_consistent_length
 from sklearn.utils.metaestimators import _BaseComposition
